@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/risk-data.js": {
+      "maxDuration": 30
+    }
+  }
+}
