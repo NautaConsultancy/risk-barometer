@@ -34,15 +34,12 @@
   header h1 .dot{color:var(--gold)}
   .stamp{font-size:12px}
 
-  /* ---- hero ---- */
   .hero{
     background:var(--card);border:1px solid var(--border);border-radius:18px;
     padding:26px;margin-bottom:18px;position:relative;overflow:hidden;
   }
   .hero-top{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
   .gauge{flex:0 0 168px;width:168px}
-  .gauge .score{font-family:'JetBrains Mono';font-weight:600;font-size:46px;line-height:1}
-  .gauge .of{font-size:13px}
   .hero-meta{flex:1;min-width:220px}
   .pill{
     display:inline-flex;align-items:center;gap:8px;border-radius:999px;
@@ -50,7 +47,7 @@
     letter-spacing:.04em;text-transform:uppercase;
   }
   .pill .pdot{width:9px;height:9px;border-radius:50%}
-  .hero-expl{margin-top:14px;font-size:15px;color:var(--text);max-width:560px}
+  .hero-expl{margin-top:14px;font-size:15px;max-width:560px}
   .advice{
     margin-top:18px;border-radius:14px;padding:16px 18px;
     background:var(--card2);border:1px solid var(--border);border-left-width:3px;
@@ -58,7 +55,6 @@
   .advice .lbl{font-family:'Syne';font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
   .advice p{font-size:14px}
 
-  /* ---- section ---- */
   .sec-title{font-family:'Syne';font-weight:700;font-size:13px;letter-spacing:.1em;
     text-transform:uppercase;color:var(--muted);margin:26px 4px 12px}
 
@@ -72,10 +68,9 @@
   .bar{height:5px;border-radius:3px;background:#241f18;margin-top:12px;overflow:hidden}
   .bar > i{display:block;height:100%;border-radius:3px}
 
-  /* ---- sectors ---- */
   .sectors{display:grid;grid-template-columns:1fr;gap:8px}
   .srow{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);
-    border-radius:12px;padding:12px 16px}
+    border-radius:12px;padding:12px 16px;flex-wrap:wrap}
   .srow .s-dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
   .srow .s-name{font-family:'Syne';font-weight:700;font-size:14px;flex:0 0 150px}
   .srow .s-reason{font-size:13px;color:var(--muted);flex:1;min-width:120px}
@@ -84,12 +79,11 @@
   .note{margin-top:26px;font-size:12.5px;color:var(--muted);line-height:1.7;
     border-top:1px solid var(--border);padding-top:16px}
   .note b{color:var(--text);font-weight:600}
-  .err{color:var(--red);font-size:12px}
+  .err{color:var(--red);font-size:13px;padding:20px 0}
   .loading{text-align:center;padding:60px 0;color:var(--muted)}
   .reload{background:none;border:1px solid var(--border);color:var(--muted);
     border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit}
   .reload:hover{border-color:var(--gold);color:var(--gold)}
-  a{color:var(--gold)}
 </style>
 </head>
 <body class="grain">
@@ -101,121 +95,121 @@
       <button class="reload" id="reload">ververs</button>
     </div>
   </header>
-
-  <div id="app">
-    <div class="loading">Data ophalen…</div>
-  </div>
+  <div id="app"><div class="loading">Data ophalen…</div></div>
 </div>
 
 <script>
-// ============================================================
-//  ZONES & SCORE  (pas hier gerust drempels/gewichten aan)
-// ============================================================
+// ── Zones & score (pas hier drempels en gewichten aan) ─────────────────────
 const COLORS = { green:'#8FA776', yellow:'#C9A84E', orange:'#CB7F45', red:'#C66E5C', na:'#5A554C' };
 const RISK   = { green:12, yellow:38, orange:63, red:88 };
 const ZNAME  = { green:'Risk-on', yellow:'Verhoogde alertheid', orange:'Risico beheren', red:'Crisis-modus' };
+const STATE  = { green:'Risk-on', yellow:'Neutraal', orange:'Stress', red:'Stress' };
 
-// niveau-knop: hogere waarde = meer risico
-function levelZone(v, g, y, o){
-  if(v==null) return 'na';
-  if(v < g) return 'green';
-  if(v < y) return 'yellow';
-  if(v < o) return 'orange';
-  return 'red';
+// Niveau-knop: hogere waarde = meer risico
+function levelZone(v, g, y, o) {
+  if (v == null) return 'na';
+  return v < g ? 'green' : v < y ? 'yellow' : v < o ? 'orange' : 'red';
 }
-// trend-knop: koers t.o.v. MA50/MA200 (onder 200d = oplopend risico)
-function trendZone(price, ma50, ma200){
-  if(price==null||ma200==null) return 'na';
-  if(ma50!=null && price>=ma50 && price>=ma200) return 'green';
-  if(price>=ma200) return 'yellow';
-  return price < ma200*0.95 ? 'red' : 'orange';
+// Trend-knop: koers vs MA50/MA200
+function trendZone(price, ma50, ma200) {
+  if (price == null || ma200 == null) return 'na';
+  if (ma50 != null && price >= ma50 && price >= ma200) return 'green';
+  if (price >= ma200) return 'yellow';
+  return price < ma200 * 0.95 ? 'red' : 'orange';
 }
-function breadthZone(pct){
-  if(pct==null) return 'na';
-  if(pct>=70) return 'green';
-  if(pct>=50) return 'yellow';
-  if(pct>=30) return 'orange';
-  return 'red';
+// Marktbreedte: % boven 200d
+function breadthZone(pct) {
+  if (pct == null) return 'na';
+  return pct >= 70 ? 'green' : pct >= 50 ? 'yellow' : pct >= 30 ? 'orange' : 'red';
 }
-const fmt = (v,d=1)=> v==null ? '—' : Number(v).toLocaleString('nl-NL',{minimumFractionDigits:d,maximumFractionDigits:d});
 
-// ============================================================
-//  RENDER
-// ============================================================
-async function load(){
+const fmt    = (v, d = 1) => v == null ? '—' : Number(v).toLocaleString('nl-NL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtPct = (v, d = 2) => v == null ? '—' : fmt(v, d) + '%';
+
+function maText(o) {
+  if (!o || o.value == null || o.ma200 == null) return 'geen data';
+  const p = ((o.value / o.ma200 - 1) * 100);
+  return p >= 0 ? `+${p.toFixed(0)}% boven 200d` : `${p.toFixed(0)}% onder 200d`;
+}
+
+// Gewichten (som = 1; knoppen zonder data worden genormaliseerd)
+const W = { ndx:.20, btc:.18, breadth:.14, vix:.12, semis:.10, wti:.08, us10y:.08, dxy:.05, hy:.05 };
+
+async function load() {
   document.getElementById('app').innerHTML = '<div class="loading">Data ophalen…</div>';
   let d;
-  try{
-    const r = await fetch('/api/risk-data', {cache:'no-store'});
+  try {
+    const r = await fetch('/api/risk-data', { cache: 'no-store' });
     d = await r.json();
-  }catch(e){
+  } catch {
     document.getElementById('app').innerHTML =
-      '<div class="loading err">Kon /api/risk-data niet bereiken. Is de serverless-route gedeployed?</div>';
+      '<div class="err">Kon /api/risk-data niet bereiken. Check of de functie gedeployed is.</div>';
     return;
   }
 
-  const m=d.macro||{}, g=d.growth||{}, c=d.crypto||{}, br=d.breadth;
+  const m = d.macro || {}, g = d.growth || {}, c = d.crypto || {}, br = d.breadth;
 
-  // --- knoppen definiëren ---
-  const wtiV = m.wti?.value, y10=m.us10y?.value, dxyV=m.dxy?.value, vixV=m.vix?.value;
+  // ── Knoppen definiëren ──────────────────────────────────────────────────
   const knobs = {
-    wti:    { name:'WTI olie',     val:fmt(wtiV), zone:levelZone(wtiV,90,100,110),
-              sub: wtiV==null?'geen data':`drempels 90 / 100 / 110` },
-    us10y:  { name:'US 10Y yield',  val:y10==null?'—':fmt(y10,2)+'%', zone:levelZone(y10,4.4,4.75,5.0),
-              sub: y10==null?'geen data':`drempels 4.4 / 4.75 / 5.0%` },
-    dxy:    { name:'DXY dollar',    val:fmt(dxyV), zone:levelZone(dxyV,104,106,108),
-              sub: dxyV==null?'geen data':`drempels 104 / 106 / 108` },
-    vix:    { name:'VIX',           val:fmt(vixV), zone:levelZone(vixV,18,24,30),
-              sub: vixV==null?'geen data':`drempels 18 / 24 / 30` },
-    ndx:    { name:'Nasdaq 100',    val:fmt(g.ndx?.value,0), zone:trendZone(g.ndx?.value,g.ndx?.ma50,g.ndx?.ma200),
-              sub: maText(g.ndx) },
-    semis:  { name:'Semiconductors',val:fmt(g.semis?.value,1), zone:trendZone(g.semis?.value,g.semis?.ma50,g.semis?.ma200),
-              sub: maText(g.semis) },
-    btc:    { name:'Bitcoin',       val:c.btc?.value==null?'—':'$'+fmt(c.btc.value,0), zone:trendZone(c.btc?.value,c.btc?.ma50,c.btc?.ma200),
-              sub: maText(c.btc) },
-    breadth:{ name:'Marktbreedte',  val:br?br.pctAbove200+'%':'—', zone:breadthZone(br?.pctAbove200),
-              sub: br?`${br.aboveCount}/${br.count} boven 200d`:'geen data' },
-    hyg:    { name:'Credit (HY)',   val:fmt(m.hyg?.value,1), zone:trendZone(m.hyg?.value,m.hyg?.ma50,m.hyg?.ma200),
-              sub: maText(m.hyg,'HYG-trend') },
+    wti:    { name:'WTI Olie',      val: fmt(m.wti?.value),         zone: levelZone(m.wti?.value, 90, 100, 110),
+              sub: m.wti ? 'drempels 90 / 100 / 110' : 'geen data' },
+    us10y:  { name:'US 10Y Yield',  val: fmtPct(m.us10y?.value),    zone: levelZone(m.us10y?.value, 4.4, 4.75, 5.0),
+              sub: m.us10y ? 'drempels 4.4 / 4.75 / 5.0%' : 'geen data · voeg FRED_API_KEY toe' },
+    dxy:    { name:'DXY Dollar',    val: fmt(m.dxy?.value),          zone: levelZone(m.dxy?.value, 104, 106, 108),
+              sub: m.dxy ? 'drempels 104 / 106 / 108' : 'geen data' },
+    vix:    { name:'VIX',           val: fmt(m.vix?.value),          zone: levelZone(m.vix?.value, 18, 24, 30),
+              sub: m.vix ? 'drempels 18 / 24 / 30' : 'geen data · voeg FRED_API_KEY toe' },
+    ndx:    { name:'Nasdaq (QQQ)',  val: fmt(g.ndx?.value),          zone: trendZone(g.ndx?.value, g.ndx?.ma50, g.ndx?.ma200),
+              sub: g.ndx ? maText(g.ndx) : 'geen data · voeg FINNHUB_KEY toe' },
+    semis:  { name:'Semis (SMH)',   val: fmt(g.semis?.value),        zone: trendZone(g.semis?.value, g.semis?.ma50, g.semis?.ma200),
+              sub: g.semis ? maText(g.semis) : 'geen data · voeg FINNHUB_KEY toe' },
+    btc:    { name:'Bitcoin',       val: c.btc?.value == null ? '—' : '$' + fmt(c.btc.value, 0),
+              zone: trendZone(c.btc?.value, c.btc?.ma50, c.btc?.ma200), sub: c.btc ? maText(c.btc) : 'geen data' },
+    breadth:{ name:'Marktbreedte',  val: br ? br.pctAbove200 + '%' : '—', zone: breadthZone(br?.pctAbove200),
+              sub: br ? `${br.aboveCount}/${br.count} posities boven 200d` : 'geen data · voeg FINNHUB_KEY toe' },
+    hy:     { name:'HY Spread',     val: fmtPct(m.hy?.value),        zone: levelZone(m.hy?.value, 3.5, 4.5, 6.0),
+              sub: m.hy ? 'drempels 3.5 / 4.5 / 6.0%' : 'geen data · voeg FRED_API_KEY toe' },
   };
 
-  // --- gewichten (som ~1; ontbrekende knoppen worden genormaliseerd) ---
-  const W = { ndx:.18, btc:.18, breadth:.14, vix:.12, semis:.10, wti:.08, us10y:.08, dxy:.06, hyg:.06 };
-  let wsum=0, acc=0;
-  for(const k in W){
-    if(knobs[k].zone!=='na'){ acc += RISK[knobs[k].zone]*W[k]; wsum += W[k]; }
+  // ── Gewogen totaalscore ────────────────────────────────────────────────
+  let wsum = 0, acc = 0;
+  for (const k in W) {
+    if (knobs[k].zone !== 'na') { acc += RISK[knobs[k].zone] * W[k]; wsum += W[k]; }
   }
-  const total = wsum>0 ? Math.round(acc/wsum) : null;
-  const tZone = total==null?'na': total<=25?'green': total<=50?'yellow': total<=75?'orange':'red';
+  const total = wsum > 0 ? Math.round(acc / wsum) : null;
+  const tZone = total == null ? 'na' : total <= 25 ? 'green' : total <= 50 ? 'yellow' : total <= 75 ? 'orange' : 'red';
 
-  // --- sectorgevoeligheid (afgeleid van relevante knoppen) ---
-  const r = k => RISK[knobs[k].zone] ?? null;
-  const avg = ks => { const v=ks.map(r).filter(x=>x!=null); return v.length?v.reduce((a,b)=>a+b)/v.length:null; };
-  const toZone = s => s==null?'na': s<=25?'green': s<=50?'yellow': s<=75?'orange':'red';
+  // ── Sectorgevoeligheid (afgeleid van relevante knoppen) ────────────────
+  const r  = k => RISK[knobs[k].zone] ?? null;
+  const avg = ks => { const v = ks.map(r).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
+  const toZ = s => s == null ? 'na' : s <= 25 ? 'green' : s <= 50 ? 'yellow' : s <= 75 ? 'orange' : 'red';
+  const blend = (a, b) => a == null ? b : (a + b) / 2;
+
   const sectors = [
-    { name:'AI-Tech',          score:avg(['ndx','semis','us10y','breadth']), why:'Nasdaq, semis, rente & breedte' },
-    { name:'Crypto',           score:avg(['btc','dxy','hyg']),               why:'BTC-trend, dollar & liquiditeit' },
-    { name:'Energy',           score:avg(['wti','vix']),                     why:'Olieprijs & macrostress' },
-    { name:'Software/CS2.0',   score:avg(['ndx','breadth','vix']),           why:'Software-sentiment & risk appetite' },
-    { name:'Software/Defence', score:blend(avg(['ndx','breadth']),38),       why:'Iets defensiever, nog high-beta' },
-    { name:'Tesla',            score:avg(['ndx','breadth','vix']),           why:'Grootste concentratie, hoge beta' },
+    { name:'AI-Tech',          score: avg(['ndx','semis','us10y','breadth']), why: 'Nasdaq, semis, rente & breedte' },
+    { name:'Crypto',           score: avg(['btc','dxy','hy']),                why: 'BTC-trend, dollar & krediet' },
+    { name:'Energy',           score: avg(['wti','vix']),                     why: 'Olieprijs & macrostress' },
+    { name:'Software/CS2.0',   score: avg(['ndx','breadth','vix']),           why: 'Software-sentiment & risk appetite' },
+    { name:'Software/Defence', score: blend(avg(['ndx','breadth']), 38),      why: 'Iets defensiever, nog high-beta' },
+    { name:'Tesla',            score: avg(['ndx','breadth','vix']),           why: 'Grootste concentratie, hoge beta' },
   ];
 
-  // --- HTML ---
+  // ── HTML bouwen ────────────────────────────────────────────────────────
   const advice = ADVICE[tZone] || ADVICE.na;
-  const col = COLORS[tZone];
+  const col    = COLORS[tZone];
   document.getElementById('stamp').textContent =
-    'bijgewerkt ' + new Date(d.asOf).toLocaleString('nl-NL',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    'bijgewerkt ' + new Date(d.asOf).toLocaleString('nl-NL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-  let html = `
-  <div class="hero" style="border-color:${shade(col)}">
+  document.getElementById('app').innerHTML = `
+  <div class="hero" style="border-color:${col}44">
     <div class="hero-top">
-      <div class="gauge">${gaugeSVG(total,col)}</div>
+      <div class="gauge">${gaugeSVG(total, col)}</div>
       <div class="hero-meta">
-        <span class="pill" style="background:${shade(col)};color:${col}">
-          <span class="pdot" style="background:${col}"></span>${tZone==='na'?'Onvoldoende data':ZNAME[tZone]}
+        <span class="pill" style="background:${col}22;color:${col}">
+          <span class="pdot" style="background:${col}"></span>
+          ${tZone === 'na' ? 'Onvoldoende data' : ZNAME[tZone]}
         </span>
-        <div class="hero-expl">${total==null?'Te weinig knoppen leverden data. Probeer te verversen.':advice.expl}</div>
+        <div class="hero-expl">${total == null ? 'Te weinig knoppen met data. Voeg FRED_API_KEY en FINNHUB_KEY toe in Vercel.' : advice.expl}</div>
       </div>
     </div>
     <div class="advice" style="border-left-color:${col}">
@@ -228,41 +222,28 @@ async function load(){
   <div class="grid">${Object.values(knobs).map(knobCard).join('')}</div>
 
   <div class="sec-title">Sectorgevoeligheid</div>
-  <div class="sectors">${sectors.map(s=>{
-    const z=toZone(s.score), col=COLORS[z];
+  <div class="sectors">${sectors.map(s => {
+    const z = toZ(s.score), c = COLORS[z];
     return `<div class="srow">
-      <span class="s-dot" style="background:${col}"></span>
+      <span class="s-dot" style="background:${c}"></span>
       <span class="s-name">${s.name}</span>
       <span class="s-reason">${s.why}</span>
-      <span class="s-state" style="color:${col}">${z==='na'?'n.b.':STATE[z]}</span>
+      <span class="s-state" style="color:${c}">${z === 'na' ? 'n.b.' : STATE[z]}</span>
     </div>`;
   }).join('')}</div>
 
   <div class="note">
     <b>Hoe te lezen.</b> Niet elke rode dag is crisis — één indicator is geen beslissing.
-    De totaalscore weegt de combinatie van knoppen; de losse kaarten laten zien wáár de stress zit.
-    "Niets doen" is een geldige uitkomst. Sectorgevoeligheid is een afgeleide inschatting op basis van de knoppen,
-    niet je portefeuilleweging (die monitor je in je portfolio-dashboard).<br><br>
-    Data: Stooq (macro/markt) &amp; CoinGecko (BTC), end-of-day. Geen beleggingsadvies.
+    De totaalscore weegt de combinatie van knoppen; de losse kaarten tonen waar de stress zit.
+    Sectorgevoeligheid is afgeleid van de knoppen, niet je portefeuilleweging.<br><br>
+    Data: Stooq (WTI, DXY) · FRED (VIX, 10Y, HY-spread) · Finnhub (NDX/QQQ, semis, breadth) · CoinGecko (BTC).
+    End-of-day, 1 dag vertraging. Geen beleggingsadvies.
   </div>`;
-
-  document.getElementById('app').innerHTML = html;
 }
 
-// ---- helpers ----
-function maText(o,label){
-  if(!o||o.value==null||o.ma200==null) return 'geen data';
-  const v=o.value, p=((v/o.ma200-1)*100);
-  const rel = v>=o.ma200 ? `+${p.toFixed(0)}% boven 200d` : `${p.toFixed(0)}% onder 200d`;
-  return (label?label+' · ':'') + rel;
-}
-function blend(a,b){ return a==null?b:(a+b)/2; }
-function shade(hex){ // donkere tint voor pill-achtergrond
-  return hex+'22';
-}
-function knobCard(k){
+function knobCard(k) {
   const col = COLORS[k.zone];
-  const pct = k.zone==='na'?6:RISK[k.zone];
+  const pct = k.zone === 'na' ? 4 : RISK[k.zone];
   return `<div class="knob">
     <div class="k-head"><span class="k-name">${k.name}</span><span class="k-dot" style="background:${col}"></span></div>
     <div class="k-val">${k.val}</div>
@@ -270,29 +251,30 @@ function knobCard(k){
     <div class="bar"><i style="width:${pct}%;background:${col}"></i></div>
   </div>`;
 }
-function gaugeSVG(score,col){
-  if(score==null) return `<div class="score mono">—</div><div class="of muted">/ 100</div>`;
-  const r=70, circ=Math.PI*r, off=circ*(1-score/100);
+
+function gaugeSVG(score, col) {
+  if (score == null) return `<div style="font-family:'JetBrains Mono';font-size:36px">—</div>`;
+  const r = 70, circ = Math.PI * r, off = circ * (1 - score / 100);
   return `<svg viewBox="0 0 168 100" width="168" height="100">
     <path d="M14 92 A70 70 0 0 1 154 92" fill="none" stroke="#241f18" stroke-width="12" stroke-linecap="round"/>
     <path d="M14 92 A70 70 0 0 1 154 92" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round"
       stroke-dasharray="${circ}" stroke-dashoffset="${off}" style="transition:stroke-dashoffset .8s ease"/>
-    <text x="84" y="78" text-anchor="middle" class="mono" fill="#E9E3D8" font-size="34" font-weight="600">${score}</text>
+    <text x="84" y="78" text-anchor="middle" fill="#E9E3D8" font-size="34" font-weight="600"
+      font-family="JetBrains Mono">${score}</text>
     <text x="84" y="95" text-anchor="middle" fill="#8A8175" font-size="11" font-family="Manrope">/ 100</text>
   </svg>`;
 }
 
-const STATE = { green:'Risk-on', yellow:'Neutraal', orange:'Stress', red:'Stress' };
 const ADVICE = {
-  green:{ expl:'De combinatie van signalen wijst op een gezonde risk-on omgeving. Geen verhoogde alertheid nodig.',
-          action:'Portfolio laten werken. Geen actie nodig. Nieuwe aankopen alleen bij een sterke setup.' },
-  yellow:{ expl:'Eén of meer knoppen lopen op, maar er is nog geen breed stresssignaal. Oplettend blijven, niet reageren op ruis.',
-          action:'Geen nieuwe margin. Nieuw geld bij voorkeur naar margin-afbouw. Monitoren, geen paniek.' },
-  orange:{ expl:'Meerdere signalen verslechteren tegelijk. Risico actief beheren in plaats van afwachten.',
-          action:'Nieuwe aankopen pauzeren. Margin actief verlagen overwegen. Zwakke/speculatieve posities identificeren. Geen averaging down.' },
-  red:{ expl:'Brede stress over macro, markt en/of crypto tegelijk. Focus verschuift naar kapitaalbehoud.',
-          action:'Crisis-modus. Focus op overleven en margin verlagen vóórdat brokerdruk ontstaat. Posities afromen volgens vooraf bepaalde prioriteit.' },
-  na:{ expl:'', action:'Onvoldoende data om een betrouwbaar advies te geven. Probeer te verversen.' },
+  green:  { expl: 'De combinatie van signalen wijst op een gezonde risk-on omgeving. Geen verhoogde alertheid nodig.',
+            action: 'Portfolio laten werken. Geen actie nodig. Nieuwe aankopen alleen bij een sterke setup.' },
+  yellow: { expl: 'Eén of meer knoppen lopen op, maar er is nog geen breed stresssignaal. Oplettend blijven, niet reageren op ruis.',
+            action: 'Geen nieuwe margin. Nieuw geld bij voorkeur naar margin-afbouw. Monitoren, geen paniek.' },
+  orange: { expl: 'Meerdere signalen verslechteren tegelijk. Risico actief beheren in plaats van afwachten.',
+            action: 'Nieuwe aankopen pauzeren. Margin actief verlagen overwegen. Zwakke/speculatieve posities identificeren. Geen averaging down.' },
+  red:    { expl: 'Brede stress over macro, markt en/of crypto. Focus verschuift naar kapitaalbehoud.',
+            action: 'Crisis-modus. Focus op overleven en margin verlagen vóórdat brokerdruk ontstaat. Afromen volgens vooraf bepaalde prioriteit.' },
+  na:     { expl: '', action: 'Voeg FRED_API_KEY en FINNHUB_KEY toe als Vercel-environment variables om alle knoppen te activeren.' },
 };
 
 document.getElementById('reload').addEventListener('click', load);
