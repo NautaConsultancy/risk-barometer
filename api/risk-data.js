@@ -1,18 +1,14 @@
 // /api/risk-data  — Vercel serverless function (Node 18+)
 //
-// Databronnen:
-//  ✅ Stooq quote  → WTI (cl.f), DXY (dx.f)                    [geen key]
-//  ✅ CoinGecko    → BTC trend                                    [geen key]
-//  🔑 FRED API     → VIX, US 10Y yield, HY OAS spread           [FRED_API_KEY env var]
-//  🔑 Finnhub      → QQQ (NDX proxy), SMH, breadth-mandje       [FINNHUB_KEY env var]
-//
-// Env vars instellen in Vercel → Settings → Environment Variables:
-//   FRED_API_KEY  → gratis key via fred.stlouisfed.org/docs/api/api_key.html
-//   FINNHUB_KEY   → hergebruik je bestaande key uit je portfolio-app
+// Databronnen (geen Finnhub meer):
+//  ✅ Stooq quote    → WTI (cl.f), DXY (dx.f)                      [geen key]
+//  ✅ FRED API       → VIX, 10Y yield, HY spread, Nasdaq history    [FRED_API_KEY]
+//  ✅ Yahoo Finance  → SMH (semis), breadth-mandje quotes           [geen key]
+//  ✅ CoinGecko      → BTC trend                                     [geen key]
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-const num = (x) => { const n = parseFloat(x); return Number.isFinite(n) ? n : null; };
+const num  = (x) => { const n = parseFloat(x); return Number.isFinite(n) ? n : null; };
 const mean = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
 
 async function getText(url, ms = 9000) {
@@ -33,14 +29,14 @@ async function stooqQuote(symbols) {
     if (!txt) continue;
     const lines = txt.trim().split('\n');
     if (lines.length < 2) continue;
-    const cols = lines[1].split(',');
-    const close = num(cols[6]); // Symbol,Date,Time,Open,High,Low,Close,Volume
+    const cols  = lines[1].split(',');
+    const close = num(cols[6]);
     if (close !== null) return { value: close, symbol: s };
   }
   return null;
 }
 
-// ── FRED: enkel getal (VIX, 10Y, HY spread) ─────────────────────────────────
+// ── FRED: enkel laatste getal (VIX, 10Y, HY spread) ─────────────────────────
 async function fredLatest(series) {
   const key = process.env.FRED_API_KEY;
   if (!key) return null;
@@ -57,26 +53,49 @@ async function fredLatest(series) {
   return null;
 }
 
-// ── Finnhub dagelijkse candles → trend (value, MA50, MA200) ─────────────────
-async function finnhubTrend(symbol, days = 220) {
-  const key = process.env.FINNHUB_KEY;
+// ── FRED: historische reeks → MA50 + MA200 (voor Nasdaq Composite trend) ─────
+async function fredHistory(series) {
+  const key = process.env.FRED_API_KEY;
   if (!key) return null;
-  const to   = Math.floor(Date.now() / 1000);
-  const from = to - days * 86400;
-  const url  = `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${to}&token=${key}`;
-  const txt  = await getText(url, 9000);
+  const from = new Date();
+  from.setDate(from.getDate() - 420);
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${key}&observation_start=${from.toISOString().slice(0, 10)}&sort_order=asc&file_type=json`;
+  const txt = await getText(url, 9000);
   if (!txt) return null;
   try {
     const d = JSON.parse(txt);
-    if (d.s !== 'ok' || !Array.isArray(d.c) || d.c.length < 50) return null;
-    const closes = d.c;
+    const closes = (d.observations || []).map(o => num(o.value)).filter(v => v !== null);
+    if (closes.length < 50) return null;
     return {
       value:  closes[closes.length - 1],
       ma50:   mean(closes.slice(-50)),
       ma200:  closes.length >= 200 ? mean(closes.slice(-200)) : mean(closes),
-      symbol,
+      symbol: `FRED:${series}`,
     };
   } catch { return null; }
+}
+
+// ── Yahoo Finance: current quote + 50d/200d MA voor meerdere symbolen ────────
+// Haalt twoHundredDayAverage en fiftyDayAverage op uit de quote API (geen key)
+async function yahooQuotes(symbols) {
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}`;
+  const txt = await getText(url, 9000);
+  if (!txt) return {};
+  try {
+    const d = JSON.parse(txt);
+    const result = {};
+    for (const q of (d.quoteResponse?.result || [])) {
+      if (q.regularMarketPrice && q.twoHundredDayAverage) {
+        result[q.symbol] = {
+          value:  q.regularMarketPrice,
+          ma50:   q.fiftyDayAverage || null,
+          ma200:  q.twoHundredDayAverage,
+          symbol: q.symbol,
+        };
+      }
+    }
+    return result;
+  } catch { return {}; }
 }
 
 // ── CoinGecko: BTC trend ─────────────────────────────────────────────────────
@@ -100,34 +119,29 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
 
-  // Breadth-mandje: ticker → Finnhub US-symbool
-  const BREADTH = ['TSLA', 'PLTR', 'S', 'TLN', 'ASML', 'UUUU'];
+  // Yahoo Finance symbolen: SMH (semis) + breadth-mandje
+  const BREADTH_SYMS = ['TSLA', 'PLTR', 'S', 'TLN', 'ASML', 'UUUU'];
 
-  const [
-    wti, dxy,                    // Stooq futures quotes
-    vix, us10y, hy,             // FRED level-indicatoren
-    ndx, semis,                  // Finnhub trend (QQQ = NDX proxy, SMH)
-    btc,                         // CoinGecko
-    ...basket
-  ] = await Promise.all([
-    stooqQuote(['cl.f']),                              // WTI olie
-    stooqQuote(['dx.f', '^dxy']),                      // DXY dollar index
-    fredLatest('VIXCLS'),                              // VIX
-    fredLatest('DGS10'),                               // US 10Y yield
-    fredLatest('BAMLH0A0HYM2'),                        // HY OAS spread (echte spread, niet ETF)
-    finnhubTrend('QQQ'),                               // Nasdaq 100 via QQQ ETF
-    finnhubTrend('SMH'),                               // Semiconductors via SMH ETF
-    btcTrend(),                                        // Bitcoin
-    ...BREADTH.map(s => finnhubTrend(s)),              // Breadth-mandje
+  const [wti, dxy, vix, us10y, hy, ndx, yahoo, btc] = await Promise.all([
+    stooqQuote(['cl.f']),                   // WTI olie
+    stooqQuote(['dx.f', '^dxy']),           // DXY dollar
+    fredLatest('VIXCLS'),                   // VIX
+    fredLatest('DGS10'),                    // US 10Y yield
+    fredLatest('BAMLH0A0HYM2'),             // HY OAS spread (%)
+    fredHistory('NASDAQCOM'),               // Nasdaq Composite → MA trend
+    yahooQuotes(['SMH', ...BREADTH_SYMS]),  // SMH semis + breadth-mandje
+    btcTrend(),                             // Bitcoin
   ]);
 
+  // Semis: SMH quote van Yahoo Finance
+  const semis = yahoo['SMH'] ?? null;
+
   // Marktbreedte: % van mandje boven 200d-gemiddelde
-  const breadthTickers = [];
-  BREADTH.forEach((sym, i) => {
-    const t = basket[i];
-    if (t?.value != null && t?.ma200 != null)
-      breadthTickers.push({ sym, value: t.value, ma200: t.ma200, above: t.value >= t.ma200 });
-  });
+  const breadthTickers = BREADTH_SYMS
+    .map(s => yahoo[s])
+    .filter(q => q?.value != null && q?.ma200 != null)
+    .map(q => ({ sym: q.symbol, value: q.value, ma200: q.ma200, above: q.value >= q.ma200 }));
+
   const breadth = breadthTickers.length >= 3 ? {
     count:       breadthTickers.length,
     aboveCount:  breadthTickers.filter(t => t.above).length,
@@ -137,7 +151,7 @@ export default async function handler(req, res) {
 
   res.status(200).json({
     asOf:   new Date().toISOString(),
-    macro:  { wti, us10y, dxy, vix, hy },    // hy = echte HY OAS spread (%)
+    macro:  { wti, us10y, dxy, vix, hy },
     growth: { ndx, semis },
     crypto: { btc },
     breadth,
